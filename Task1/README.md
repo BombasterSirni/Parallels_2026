@@ -1,22 +1,24 @@
 # **Task №1**: *Заполнение массива значениями синуса*
 ### **Сборка задачи с выбором float/double:**
+
     1. Сборка задачи с массивом типа float (default):
-    ```bash
-    cd Task1
-    cmake -B build
-    cd build
-    make
-    ./sin_sum
-    ```bash
+```bash
+cd Task1
+cmake -B build
+cd build
+make
+./sin_sum
+```
 
     2. Сборка задачи с массивом типа double:
-    ```bash
-    cd Task1
-    cmake -B build -DUSE_DOUBLE=ON
-    cd build
-    make
-    ./sin_sum
-    ```bash
+```bash
+cd Task1
+cmake -B build -DUSE_DOUBLE=ON
+cd build
+make
+./sin_sum
+```
+
 
 ### **Значения суммы массива**:
     1. тип float: -0.0040017021819949150085449
