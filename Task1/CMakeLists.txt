@@ -9,4 +9,3 @@ if(USE_DOUBLE)
     target_compile_definitions(sin_sum PRIVATE USE_DOUBLE)
 endif()
 
-target_link_libraries(sin_sum PRIVATE m)
