@@ -90,9 +90,6 @@ private:
                 if ((stoken.stop_requested() || !running_) && tasks_.empty()) {
                     break;
                 }
-                if (tasks_.empty()) {
-                    continue;
-                }
 
                 current = std::move(tasks_.front());
                 tasks_.pop();

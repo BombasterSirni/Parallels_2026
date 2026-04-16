@@ -25,8 +25,3 @@ cd build
 ./Task1/task1_benchmark --quick
 ```
 
-или с ручными параметрами:
-
-```bash
-./Task1/task1_benchmark --sizes=300,600 --threads=1,2,4
-```
