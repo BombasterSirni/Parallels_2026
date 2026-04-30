@@ -69,7 +69,7 @@ void run_pow_client(TaskServer<double> &server, int n, const std::string &file_p
     }
 }
 
-} // namespace
+}
 
 int main(int argc, char **argv) {
     int n = 100;
