@@ -3,10 +3,8 @@ import threading
 import queue
 import time
 import argparse
-import sys
 import os
 import logging
-from abc import ABC, abstractmethod
 
 
 log_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'log')
@@ -18,7 +16,7 @@ logging.basicConfig(
 )
 
 
-class Sensor(ABC):
+class Sensor:
     def get(self):
         raise NotImplementedError("Subclasses must implement method get()")
 
