@@ -127,8 +127,8 @@ def sensor_worker(sensor_obj, out_queue, stop_event):
 def main():
     parser = argparse.ArgumentParser(
         description="Task 1: Sensor reading and displaying")
-    parser.add_argument('--camera', type=str, default='0',
-                        help='Имя камеры в системе (например, 0 или /dev/video0)')
+    parser.add_argument('--camera', type=str, default='/dev/video0',
+                        help='Путь к устройству камеры в системе (например, /dev/video0)')
     parser.add_argument('--resolution', type=str, default='640x480',
                         help='Желаемое разрешение камеры (например, 1280x720)')
     parser.add_argument('--freq', type=float, default=30.0,
@@ -209,7 +209,6 @@ def main():
             cv2.putText(frame, last_s1_data, (10, 90),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
 
-            # Если 'q' нажата - выходим
             if window.show(frame):
                 stop_event.set()
                 break
