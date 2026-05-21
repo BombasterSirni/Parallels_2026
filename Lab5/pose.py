@@ -135,13 +135,11 @@ def main():
 
         if args.realtime:
             try:
-                # В реальном времени: если буфер забит, мы просто пропускаем (отбрасываем) кадр камеры
                 input_queue.put_nowait((frame_idx, frame))
                 frame_idx += 1
             except queue.Full:
                 pass
         else:
-            # Офлайн режим: мы ждем, пока освободится место
             input_queue.put((frame_idx, frame))
             frame_idx += 1
 
