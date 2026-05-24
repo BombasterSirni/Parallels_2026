@@ -3,6 +3,7 @@
 #include <cmath>
 #include <algorithm>
 #include <iomanip>
+#include <chrono>
 #include <boost/program_options.hpp>
 
 namespace po = boost::program_options;
@@ -66,6 +67,8 @@ int main(int argc, char** argv) {
     double error = 1.0;
     int iter = 0;
 
+    auto start_time = std::chrono::high_resolution_clock::now();
+
     #pragma acc data copy(A[0:N*N], Anew[0:N*N])
     {
         while (error > tol && iter < max_iter) {
@@ -101,8 +104,12 @@ int main(int argc, char** argv) {
         }
     }
 
+    auto end_time = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> elapsed = end_time - start_time;
+
     std::cout << "Iterations: " << iter << "\n";
     std::cout << "Error: " << std::scientific << std::setprecision(6) << error << "\n";
+    std::cout << "Time: " << std::fixed << std::setprecision(4) << elapsed.count() << " s\n";
 
     if (N <= 13) {
         std::cout << "\nGrid output:\n";
