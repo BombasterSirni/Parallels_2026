@@ -3,7 +3,7 @@
 #include <cmath>
 #include <algorithm>
 #include <iomanip>
-#include <boost/program_options.h>
+#include <boost/program_options.hpp>
 
 namespace po = boost::program_options;
 
