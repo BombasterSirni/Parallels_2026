@@ -1,5 +1,6 @@
 CXX = pgc++
-CXXFLAGS = -acc -Minfo=all -std=c++11 -O3 -I$(CONDA_PREFIX)/include
+ACC ?= gpu
+CXXFLAGS = -acc=$(ACC) -Minfo=all -std=c++11 -O3 -I$(CONDA_PREFIX)/include
 
 LDFLAGS = -L$(CONDA_PREFIX)/lib -Wl,-rpath,$(CONDA_PREFIX)/lib -lboost_program_options
 
