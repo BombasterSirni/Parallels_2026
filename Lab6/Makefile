@@ -9,7 +9,7 @@ SRC = therm.cpp
 all: $(TARGET)
 
 $(TARGET): $(SRC)
-    $(CXX) $(CXXFLAGS) $(SRC) -o $(TARGET) $(LDFLAGS)
+	$(CXX) $(CXXFLAGS) $(SRC) -o $(TARGET) $(LDFLAGS)
 
 clean:
-    rm -f $(TARGET)
+	rm -f $(TARGET)
