@@ -72,7 +72,6 @@ int main(int argc, char** argv) {
     #pragma acc data copy(A[0:N*N], Anew[0:N*N])
     {
         while (error > tol && iter < max_iter) {
-
             #pragma acc parallel loop collapse(2) present(A, Anew)
             for (int i = 1; i < N - 1; ++i) {
                 for (int j = 1; j < N - 1; ++j) {
@@ -80,22 +79,17 @@ int main(int argc, char** argv) {
                 }
             }
 
-            // Проверяем ошибку только каждую 100-ю итерацию
-            // Это избавляет нас от чудовищных накладных расходов на синхронизацию каждый шаг
-            if (iter % 100 == 0) {
-                error = 0.0;
-                #pragma acc parallel loop collapse(2) reduction(max:error) present(A, Anew)
-                for (int i = 1; i < N - 1; ++i) {
-                    for (int j = 1; j < N - 1; ++j) {
-                        double diff = std::abs(Anew[i * N + j] - A[i * N + j]);
-                        if (diff > error) {
-                            error = diff;
-                        }
+            error = 0.0;
+            #pragma acc parallel loop collapse(2) reduction(max:error) present(A, Anew)
+            for (int i = 1; i < N - 1; ++i) {
+                for (int j = 1; j < N - 1; ++j) {
+                    double diff = std::abs(Anew[i * N + j] - A[i * N + j]);
+                    if (diff > error) {
+                        error = diff;
                     }
                 }
             }
 
-            // Классическое копирование - как оказалось, лучше всего ложится на кэши CPU
             #pragma acc parallel loop collapse(2) present(A, Anew)
             for (int i = 1; i < N - 1; ++i) {
                 for (int j = 1; j < N - 1; ++j) {
