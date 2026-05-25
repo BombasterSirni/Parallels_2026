@@ -79,23 +79,20 @@ int main(int argc, char** argv) {
                 }
             }
 
-            error = 0.0;
-            #pragma acc parallel loop collapse(2) reduction(max:error) present(A, Anew)
-            for (int i = 1; i < N - 1; ++i) {
-                for (int j = 1; j < N - 1; ++j) {
-                    double diff = std::abs(Anew[i * N + j] - A[i * N + j]);
-                    if (diff > error) {
-                        error = diff;
+            if (iter % 100 == 0 || iter == 0) {
+                error = 0.0;
+                #pragma acc parallel loop collapse(2) reduction(max:error) present(A, Anew)
+                for (int i = 1; i < N - 1; ++i) {
+                    for (int j = 1; j < N - 1; ++j) {
+                        double diff = std::abs(Anew[i * N + j] - A[i * N + j]);
+                        error = std::max(error, diff);
                     }
                 }
             }
 
-            #pragma acc parallel loop collapse(2) present(A, Anew)
-            for (int i = 1; i < N - 1; ++i) {
-                for (int j = 1; j < N - 1; ++j) {
-                    A[i * N + j] = Anew[i * N + j];
-                }
-            }
+            double* temp = A;
+            A = Anew;
+            Anew = temp;
             
             iter++;
         }
