@@ -74,25 +74,17 @@ int main(int argc, char** argv) {
         while (error > tol && iter < max_iter) {
             error = 0.0;
 
-            #pragma acc parallel loop collapse(2) present(A, Anew)
-            for (int i = 1; i < N - 1; ++i) {
-                for (int j = 1; j < N - 1; ++j) {
-                    Anew[i * N + j] = 0.25 * (A[(i - 1) * N + j] + A[(i + 1) * N + j] + A[i * N + (j - 1)] + A[i * N + (j + 1)]);
-                }
-            }
-
             #pragma acc parallel loop collapse(2) reduction(max:error) present(A, Anew)
             for (int i = 1; i < N - 1; ++i) {
                 for (int j = 1; j < N - 1; ++j) {
+                    Anew[i * N + j] = 0.25 * (A[(i - 1) * N + j] + A[(i + 1) * N + j] + A[i * N + (j - 1)] + A[i * N + (j + 1)]);
                     double diff = std::abs(Anew[i * N + j] - A[i * N + j]);
                     if (diff > error) {
                         error = diff;
                     }
                 }
             }
-
-            // Using pointer swapping to avoid full array copy, but we need to ensure OpenACC handles it.
-            // A safer approach inside the data region is to just copy inside a parallel loop if pointer swap fails on device.
+            
             #pragma acc parallel loop collapse(2) present(A, Anew)
             for (int i = 1; i < N - 1; ++i) {
                 for (int j = 1; j < N - 1; ++j) {
