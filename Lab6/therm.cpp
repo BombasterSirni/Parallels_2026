@@ -85,14 +85,19 @@ int main(int argc, char** argv) {
                 for (int i = 1; i < N - 1; ++i) {
                     for (int j = 1; j < N - 1; ++j) {
                         double diff = std::abs(Anew[i * N + j] - A[i * N + j]);
-                        error = std::max(error, diff);
+                        if (diff > error) {
+                            error = diff;
+                        }
                     }
                 }
             }
 
-            double* temp = A;
-            A = Anew;
-            Anew = temp;
+            #pragma acc parallel loop collapse(2) present(A, Anew)
+            for (int i = 1; i < N - 1; ++i) {
+                for (int j = 1; j < N - 1; ++j) {
+                    A[i * N + j] = Anew[i * N + j];
+                }
+            }
             
             iter++;
         }
