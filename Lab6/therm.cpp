@@ -37,32 +37,37 @@ int main(int argc, char** argv) {
 
     int N = grid_size;
     
-    std::vector<double> grid(N * N, 0.0);
-    std::vector<double> new_grid(N * N, 0.0);
+    double* A = new double[N * N];
+    double* Anew = new double[N * N];
+
+    #pragma acc parallel loop
+    for (int i = 0; i < N; ++i) {
+        for (int j = 0; j < N; ++j) {
+            A[i * N + j] = 0.0;
+            Anew[i * N + j] = 0.0;
+        }
+    }
 
     double top_left = 10.0, top_right = 20.0;
     double bottom_left = 20.0, bottom_right = 30.0;
 
     for (int i = 0; i < N; ++i) {
         // top edge (row 0)
-        grid[0 * N + i] = top_left + i * (top_right - top_left) / (N - 1);
+        A[0 * N + i] = top_left + i * (top_right - top_left) / (N - 1);
         // bottom edge (row N-1)
-        grid[(N - 1) * N + i] = bottom_left + i * (bottom_right - bottom_left) / (N - 1);
+        A[(N - 1) * N + i] = bottom_left + i * (bottom_right - bottom_left) / (N - 1);
         // left edge (col 0)
-        grid[i * N + 0] = top_left + i * (bottom_left - top_left) / (N - 1);
+        A[i * N + 0] = top_left + i * (bottom_left - top_left) / (N - 1);
         // right edge (col N-1)
-        grid[i * N + (N - 1)] = top_right + i * (bottom_right - top_right) / (N - 1);
+        A[i * N + (N - 1)] = top_right + i * (bottom_right - top_right) / (N - 1);
     }
 
     for (int i = 0; i < N; ++i) {
-        new_grid[0 * N + i] = grid[0 * N + i];
-        new_grid[(N - 1) * N + i] = grid[(N - 1) * N + i];
-        new_grid[i * N + 0] = grid[i * N + 0];
-        new_grid[i * N + (N - 1)] = grid[i * N + (N - 1)];
+        Anew[0 * N + i] = A[0 * N + i];
+        Anew[(N - 1) * N + i] = A[(N - 1) * N + i];
+        Anew[i * N + 0] = A[i * N + 0];
+        Anew[i * N + (N - 1)] = A[i * N + (N - 1)];
     }
-
-    double* A = grid.data();
-    double* Anew = new_grid.data();
 
     double error = 1.0;
     int iter = 0;
@@ -72,7 +77,7 @@ int main(int argc, char** argv) {
     #pragma acc data copy(A[0:N*N], Anew[0:N*N])
     {
         while (error > tol && iter < max_iter) {
-            #pragma acc parallel loop collapse(2) present(A, Anew)
+            #pragma acc parallel loop present(A, Anew)
             for (int i = 1; i < N - 1; ++i) {
                 for (int j = 1; j < N - 1; ++j) {
                     Anew[i * N + j] = 0.25 * (A[(i - 1) * N + j] + A[(i + 1) * N + j] + A[i * N + (j - 1)] + A[i * N + (j + 1)]);
@@ -81,7 +86,7 @@ int main(int argc, char** argv) {
 
             if (iter % 100 == 0 || iter == 0) {
                 error = 0.0;
-                #pragma acc parallel loop collapse(2) reduction(max:error) present(A, Anew)
+                #pragma acc parallel loop reduction(max:error) present(A, Anew)
                 for (int i = 1; i < N - 1; ++i) {
                     for (int j = 1; j < N - 1; ++j) {
                         double diff = std::abs(Anew[i * N + j] - A[i * N + j]);
@@ -92,7 +97,7 @@ int main(int argc, char** argv) {
                 }
             }
 
-            #pragma acc parallel loop collapse(2) present(A, Anew)
+            #pragma acc parallel loop present(A, Anew)
             for (int i = 1; i < N - 1; ++i) {
                 for (int j = 1; j < N - 1; ++j) {
                     A[i * N + j] = Anew[i * N + j];
@@ -119,6 +124,9 @@ int main(int argc, char** argv) {
             std::cout << "\n";
         }
     }
+
+    delete[] A;
+    delete[] Anew;
 
     return 0;
 }
