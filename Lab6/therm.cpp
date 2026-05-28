@@ -14,12 +14,13 @@
 namespace {
 
 void set_boundaries(double* grid, double* next, int nx, int ny) {
+  const int size = nx * ny;
   const double tl = 10.0;
   const double tr = 20.0;
   const double br = 30.0;
   const double bl = 20.0;
 
-  #pragma acc parallel loop
+  #pragma acc parallel loop copyout(grid[0:size], next[0:size])
   for (int j = 0; j < nx; ++j) {
     const double t = static_cast<double>(j) / static_cast<double>(nx - 1);
     const double top = tl + t * (tr - tl);
@@ -33,7 +34,7 @@ void set_boundaries(double* grid, double* next, int nx, int ny) {
     next[bottom_idx] = bottom;
   }
 
-  #pragma acc parallel loop
+  #pragma acc parallel loop copyout(grid[0:size], next[0:size])
   for (int i = 0; i < ny; ++i) {
     const double t = static_cast<double>(i) / static_cast<double>(ny - 1);
     const double left = tl + t * (bl - tl);
@@ -50,7 +51,7 @@ void set_boundaries(double* grid, double* next, int nx, int ny) {
 void init_grids(double* grid, double* next, int nx, int ny) {
   const int size = nx * ny;
 
-  #pragma acc parallel loop
+  #pragma acc parallel loop copyout(grid[0:size], next[0:size])
   for (int k = 0; k < size; ++k) {
     grid[k] = 0.0;
     next[k] = 0.0;
