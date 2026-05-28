@@ -1,132 +1,201 @@
-#include <iostream>
-#include <vector>
-#include <cmath>
-#include <algorithm>
-#include <iomanip>
-#include <chrono>
 #include <boost/program_options.hpp>
 
-namespace po = boost::program_options;
+#include <chrono>
+#include <cmath>
+#include <cstdlib>
+#include <fstream>
+#include <iomanip>
+#include <iostream>
+#include <memory>
+#include <stdexcept>
+#include <string>
+#include <utility>
+
+namespace {
+
+void set_boundaries(double* grid, double* next, int nx, int ny) {
+	const double tl = 10.0;
+	const double tr = 20.0;
+	const double br = 30.0;
+	const double bl = 20.0;
+
+	#pragma acc parallel loop
+	for (int j = 0; j < nx; ++j) {
+		const double t = static_cast<double>(j) / static_cast<double>(nx - 1);
+		const double top = tl + t * (tr - tl);
+		const double bottom = bl + t * (br - bl);
+		const size_t top_idx = static_cast<size_t>(j);
+		const size_t bottom_idx = static_cast<size_t>(ny - 1) *
+							  static_cast<size_t>(nx) + static_cast<size_t>(j);
+		grid[top_idx] = top;
+		next[top_idx] = top;
+		grid[bottom_idx] = bottom;
+		next[bottom_idx] = bottom;
+	}
+
+	#pragma acc parallel loop
+	for (int i = 0; i < ny; ++i) {
+		const double t = static_cast<double>(i) / static_cast<double>(ny - 1);
+		const double left = tl + t * (bl - tl);
+		const double right = tr + t * (br - tr);
+		const size_t left_idx = static_cast<size_t>(i) * static_cast<size_t>(nx);
+		const size_t right_idx = left_idx + static_cast<size_t>(nx - 1);
+		grid[left_idx] = left;
+		next[left_idx] = left;
+		grid[right_idx] = right;
+		next[right_idx] = right;
+	}
+}
+
+void init_grids(double* grid, double* next, int nx, int ny) {
+	const int size = nx * ny;
+
+	#pragma acc parallel loop
+	for (int k = 0; k < size; ++k) {
+		grid[k] = 0.0;
+		next[k] = 0.0;
+	}
+
+	set_boundaries(grid, next, nx, ny);
+}
+
+void save_matrix(const std::string& path, const double* grid, int nx, int ny) {
+	std::ofstream out(path.c_str(), std::ios::out | std::ios::trunc);
+	if (!out) {
+		throw std::runtime_error("Ошибка при открытии файла: " + path);
+	}
+
+	out << std::setprecision(12);
+	for (int i = 0; i < ny; ++i) {
+		const size_t row = static_cast<size_t>(i) * static_cast<size_t>(nx);
+		for (int j = 0; j < nx; ++j) {
+			if (j > 0) {
+				out << ' ';
+			}
+			out << grid[row + static_cast<size_t>(j)];
+		}
+		out << '\n';
+	}
+}
+
+void print_matrix(const double* grid, int nx, int ny) {
+	std::cout << std::fixed << std::setprecision(6);
+	for (int i = 0; i < ny; ++i) {
+		const size_t row = static_cast<size_t>(i) * static_cast<size_t>(nx);
+		for (int j = 0; j < nx; ++j) {
+			std::cout << grid[row + static_cast<size_t>(j)];
+			if (j + 1 < nx) {
+				std::cout << ' ';
+			}
+		}
+		std::cout << '\n';
+	}
+}
+
+}  // namespace
 
 int main(int argc, char** argv) {
-    int grid_size = 128;
-    int max_iter = 1000000;
-    double tol = 1e-6;
+	namespace po = boost::program_options;
 
-    po::options_description desc("Allowed options");
-    desc.add_options()
-        ("help", "produce help message")
-        ("accuracy", po::value<double>(&tol)->default_value(1e-6), "precision limit")
-        ("size", po::value<int>(&grid_size)->default_value(128), "grid size (e.g. 128 for 128x128)")
-        ("iter", po::value<int>(&max_iter)->default_value(1000000), "maximum number of iterations")
-    ;
+	int n = 128;
+	int nx = 0;
+	int ny = 0;
+	int max_iter = 1000000;
+	double eps = 1e-6;
+	std::string out_file = "result.dat";
 
-    po::variables_map vm;
-    try {
-        po::store(po::parse_command_line(argc, argv, desc), vm);
-        po::notify(vm);
-    } catch (std::exception& e) {
-        std::cerr << "Error: " << e.what() << "\n";
-        return 1;
-    }
+	po::options_description desc("Опции");
+	desc.add_options()
+		("help,h", "Помощь")
+		("n", po::value<int>(&n)->default_value(128), "Размер сетки")
+		("nx", po::value<int>(&nx), "Размер сетки по X")
+		("ny", po::value<int>(&ny), "Размер сетки по Y")
+		("eps,e", po::value<double>(&eps)->default_value(1e-6), "Точность")
+		("max-iter,i", po::value<int>(&max_iter)->default_value(1000000), "Максимум итераций")
+		("out,o", po::value<std::string>(&out_file)->default_value("result.dat"), "Выходной результат");
 
-    if (vm.count("help")) {
-        std::cout << desc << "\n";
-        return 0;
-    }
+	po::variables_map vm;
+	try {
+		po::store(po::parse_command_line(argc, argv, desc), vm);
+		po::notify(vm);
+	} catch (const std::exception& ex) {
+		std::cerr << "Error: " << ex.what() << '\n';
+		std::cerr << desc << '\n';
+		return 1;
+	}
 
-    int N = grid_size;
-    
-    double* A = new double[N * N];
-    double* Anew = new double[N * N];
+	if (vm.count("help") > 0) {
+		std::cout << desc << '\n';
+		return 0;
+	}
 
-    #pragma acc parallel loop
-    for (int i = 0; i < N; ++i) {
-        for (int j = 0; j < N; ++j) {
-            A[i * N + j] = 0.0;
-            Anew[i * N + j] = 0.0;
-        }
-    }
+	if (nx <= 0) {
+		nx = n;
+	}
+	if (ny <= 0) {
+		ny = n;
+	}
 
-    double top_left = 10.0, top_right = 20.0;
-    double bottom_left = 20.0, bottom_right = 30.0;
 
-    for (int i = 0; i < N; ++i) {
-        // top edge (row 0)
-        A[0 * N + i] = top_left + i * (top_right - top_left) / (N - 1);
-        // bottom edge (row N-1)
-        A[(N - 1) * N + i] = bottom_left + i * (bottom_right - bottom_left) / (N - 1);
-        // left edge (col 0)
-        A[i * N + 0] = top_left + i * (bottom_left - top_left) / (N - 1);
-        // right edge (col N-1)
-        A[i * N + (N - 1)] = top_right + i * (bottom_right - top_right) / (N - 1);
-    }
+	const size_t size = static_cast<size_t>(nx) * static_cast<size_t>(ny);
+	std::unique_ptr<double[]> grid(new double[size]);
+	std::unique_ptr<double[]> next(new double[size]);
 
-    for (int i = 0; i < N; ++i) {
-        Anew[0 * N + i] = A[0 * N + i];
-        Anew[(N - 1) * N + i] = A[(N - 1) * N + i];
-        Anew[i * N + 0] = A[i * N + 0];
-        Anew[i * N + (N - 1)] = A[i * N + (N - 1)];
-    }
+	init_grids(grid.get(), next.get(), nx, ny);
 
-    double error = 1.0;
-    int iter = 0;
+	double* cur = grid.get();
+	double* nxt = next.get();
 
-    auto start_time = std::chrono::high_resolution_clock::now();
+	int iter = 0;
+	double err = 0.0;
 
-    #pragma acc data copy(A[0:N*N], Anew[0:N*N])
-    {
-        while (error > tol && iter < max_iter) {
-            #pragma acc parallel loop present(A, Anew)
-            for (int i = 1; i < N - 1; ++i) {
-                for (int j = 1; j < N - 1; ++j) {
-                    Anew[i * N + j] = 0.25 * (A[(i - 1) * N + j] + A[(i + 1) * N + j] + A[i * N + (j - 1)] + A[i * N + (j + 1)]);
-                }
-            }
+	const auto start_time = std::chrono::steady_clock::now();
 
-            if (iter % 100 == 0 || iter == 0) {
-                error = 0.0;
-                #pragma acc parallel loop reduction(max:error) present(A, Anew)
-                for (int i = 1; i < N - 1; ++i) {
-                    for (int j = 1; j < N - 1; ++j) {
-                        double diff = std::abs(Anew[i * N + j] - A[i * N + j]);
-                        if (diff > error) {
-                            error = diff;
-                        }
-                    }
-                }
-            }
+#pragma acc data copy(cur[0:size], nxt[0:size])
+	{
+		while (iter < max_iter) {
+			err = 0.0;
+#pragma acc parallel loop collapse(2) reduction(max : err)
+			for (int i = 1; i < ny - 1; ++i) {
+				for (int j = 1; j < nx - 1; ++j) {
+					const size_t k = static_cast<size_t>(i) * static_cast<size_t>(nx) +
+									 static_cast<size_t>(j);
+					const double new_val = 0.25 * (cur[k - 1] + cur[k + 1] +
+									   cur[k - static_cast<size_t>(nx)] +
+									   cur[k + static_cast<size_t>(nx)]);
+					nxt[k] = new_val;
+					const double diff = std::fabs(new_val - cur[k]);
+					if (diff > err) {
+						err = diff;
+					}
+				}
+			}
 
-            #pragma acc parallel loop present(A, Anew)
-            for (int i = 1; i < N - 1; ++i) {
-                for (int j = 1; j < N - 1; ++j) {
-                    A[i * N + j] = Anew[i * N + j];
-                }
-            }
-            
-            iter++;
-        }
-    }
+			std::swap(cur, nxt);
+			++iter;
 
-    auto end_time = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double> elapsed = end_time - start_time;
+			if (err <= eps) {
+				break;
+			}
+		}
+	}
 
-    std::cout << "Iterations: " << iter << "\n";
-    std::cout << "Error: " << std::scientific << std::setprecision(6) << error << "\n";
-    std::cout << "Time: " << std::fixed << std::setprecision(4) << elapsed.count() << " s\n";
+	const auto end_time = std::chrono::steady_clock::now();
+	const std::chrono::duration<double> elapsed = end_time - start_time;
 
-    if (N <= 13) {
-        std::cout << "\nGrid output:\n";
-        for (int i = 0; i < N; ++i) {
-            for (int j = 0; j < N; ++j) {
-                std::cout << std::fixed << std::setprecision(2) << std::setw(6) << A[i * N + j] << " ";
-            }
-            std::cout << "\n";
-        }
-    }
+	std::cout << "Итераций: " << iter << ", Ошибка: " << err
+			  << ", Время: " << elapsed.count() << " сек" << '\n';
 
-    delete[] A;
-    delete[] Anew;
+	try {
+		save_matrix(out_file, cur, nx, ny);
+	} catch (const std::exception& ex) {
+		std::cerr << ex.what() << '\n';
+		return 1;
+	}
 
-    return 0;
+	if (nx == ny && (nx == 10 || nx == 13)) {
+		print_matrix(cur, nx, ny);
+	}
+
+	return 0;
 }
