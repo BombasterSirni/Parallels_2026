@@ -14,11 +14,13 @@
 namespace {
 
 void set_boundaries(double* grid, double* next, int nx, int ny) {
+	const int size = nx * ny;
 	const double tl = 10.0;
 	const double tr = 20.0;
 	const double br = 30.0;
 	const double bl = 20.0;
 
+	#pragma acc parallel loop present(grid[0:size], next[0:size])
 	for (int j = 0; j < nx; ++j) {
 		const double t = static_cast<double>(j) / static_cast<double>(nx - 1);
 		const double top = tl + t * (tr - tl);
@@ -32,6 +34,7 @@ void set_boundaries(double* grid, double* next, int nx, int ny) {
 		next[bottom_idx] = bottom;
 	}
 
+	#pragma acc parallel loop present(grid[0:size], next[0:size])
 	for (int i = 0; i < ny; ++i) {
 		const double t = static_cast<double>(i) / static_cast<double>(ny - 1);
 		const double left = tl + t * (bl - tl);
@@ -48,7 +51,7 @@ void set_boundaries(double* grid, double* next, int nx, int ny) {
 void init_grids(double* grid, double* next, int nx, int ny) {
 	const int size = nx * ny;
 
-	#pragma acc parallel loop copyout(grid[0:size], next[0:size])
+	#pragma acc parallel loop present(grid[0:size], next[0:size])
 	for (int k = 0; k < size; ++k) {
 		grid[k] = 0.0;
 		next[k] = 0.0;
@@ -139,21 +142,22 @@ int main(int argc, char** argv) {
 	std::unique_ptr<double[]> grid(new double[size]);
 	std::unique_ptr<double[]> next(new double[size]);
 
-	init_grids(grid.get(), next.get(), nx, ny);
-
 	double* cur = grid.get();
 	double* nxt = next.get();
 
 	int iter = 0;
 	double err = 0.0;
 
-	const auto start_time = std::chrono::steady_clock::now();
+	std::chrono::steady_clock::time_point start_time;
+	std::chrono::steady_clock::time_point end_time;
 
-#pragma acc data copy(cur[0:size], nxt[0:size])
+#pragma acc data create(cur[0:size], nxt[0:size])
 	{
+		init_grids(cur, nxt, nx, ny);
+		start_time = std::chrono::steady_clock::now();
 		while (iter < max_iter) {
 			err = 0.0;
-#pragma acc parallel loop collapse(2) reduction(max : err)
+#pragma acc parallel loop collapse(2) reduction(max : err) present(cur[0:size], nxt[0:size])
 			for (int i = 1; i < ny - 1; ++i) {
 				for (int j = 1; j < nx - 1; ++j) {
 					const size_t k = static_cast<size_t>(i) * static_cast<size_t>(nx) +
@@ -176,9 +180,10 @@ int main(int argc, char** argv) {
 				break;
 			}
 		}
+		end_time = std::chrono::steady_clock::now();
+		#pragma acc update self(cur[0:size])
 	}
 
-	const auto end_time = std::chrono::steady_clock::now();
 	const std::chrono::duration<double> elapsed = end_time - start_time;
 
 	std::cout << "Итераций: " << iter << ", Ошибка: " << err
