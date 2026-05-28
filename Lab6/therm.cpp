@@ -102,6 +102,7 @@ int main(int argc, char** argv) {
   int nx = 0;
   int ny = 0;
   int max_iter = 1000000;
+  int check_interval = 10;
   double eps = 1e-6;
   std::string out_file = "result.dat";
 
@@ -113,6 +114,7 @@ int main(int argc, char** argv) {
     ("ny", po::value<int>(&ny), "Размер сетки по Y")
     ("eps,e", po::value<double>(&eps)->default_value(1e-6), "Точность")
     ("max-iter,i", po::value<int>(&max_iter)->default_value(1000000), "Максимум итераций")
+    ("check-iter", po::value<int>(&check_interval)->default_value(10), "Проверка ошибки каждые N итераций")
     ("out,o", po::value<std::string>(&out_file)->default_value("result.dat"), "Выходной результат");
 
   po::variables_map vm;
@@ -156,19 +158,34 @@ int main(int argc, char** argv) {
 #pragma acc data copy(cur[0:size], nxt[0:size])
   {
     while (iter < max_iter) {
-      err = 0.0;
+      const bool do_check = (iter % check_interval == 0) || (iter == max_iter - 1);
+      if (do_check) {
+        err = 0.0;
 #pragma acc parallel loop collapse(2) reduction(max : err)
-      for (int i = 1; i < ny - 1; ++i) {
-        for (int j = 1; j < nx - 1; ++j) {
-          const size_t k = static_cast<size_t>(i) * static_cast<size_t>(nx) +
-                   static_cast<size_t>(j);
-          const double new_val = 0.25 * (cur[k - 1] + cur[k + 1] +
-                     cur[k - static_cast<size_t>(nx)] +
-                     cur[k + static_cast<size_t>(nx)]);
-          nxt[k] = new_val;
-          const double diff = std::fabs(new_val - cur[k]);
-          if (diff > err) {
-            err = diff;
+        for (int i = 1; i < ny - 1; ++i) {
+          for (int j = 1; j < nx - 1; ++j) {
+            const size_t k = static_cast<size_t>(i) * static_cast<size_t>(nx) +
+                     static_cast<size_t>(j);
+            const double new_val = 0.25 * (cur[k - 1] + cur[k + 1] +
+                       cur[k - static_cast<size_t>(nx)] +
+                       cur[k + static_cast<size_t>(nx)]);
+            nxt[k] = new_val;
+            const double diff = std::fabs(new_val - cur[k]);
+            if (diff > err) {
+              err = diff;
+            }
+          }
+        }
+      } else {
+#pragma acc parallel loop collapse(2)
+        for (int i = 1; i < ny - 1; ++i) {
+          for (int j = 1; j < nx - 1; ++j) {
+            const size_t k = static_cast<size_t>(i) * static_cast<size_t>(nx) +
+                     static_cast<size_t>(j);
+            const double new_val = 0.25 * (cur[k - 1] + cur[k + 1] +
+                       cur[k - static_cast<size_t>(nx)] +
+                       cur[k + static_cast<size_t>(nx)]);
+            nxt[k] = new_val;
           }
         }
       }
@@ -176,7 +193,7 @@ int main(int argc, char** argv) {
       std::swap(cur, nxt);
       ++iter;
 
-      if (err <= eps) {
+      if (do_check && err <= eps) {
         break;
       }
     }
