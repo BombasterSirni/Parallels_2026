@@ -14,191 +14,189 @@
 namespace {
 
 void set_boundaries(double* grid, double* next, int nx, int ny) {
-	const int size = nx * ny;
-	const double tl = 10.0;
-	const double tr = 20.0;
-	const double br = 30.0;
-	const double bl = 20.0;
+  const double tl = 10.0;
+  const double tr = 20.0;
+  const double br = 30.0;
+  const double bl = 20.0;
 
-	#pragma acc parallel loop present(grid[0:size], next[0:size])
-	for (int j = 0; j < nx; ++j) {
-		const double t = static_cast<double>(j) / static_cast<double>(nx - 1);
-		const double top = tl + t * (tr - tl);
-		const double bottom = bl + t * (br - bl);
-		const size_t top_idx = static_cast<size_t>(j);
-		const size_t bottom_idx = static_cast<size_t>(ny - 1) *
-							  static_cast<size_t>(nx) + static_cast<size_t>(j);
-		grid[top_idx] = top;
-		next[top_idx] = top;
-		grid[bottom_idx] = bottom;
-		next[bottom_idx] = bottom;
-	}
+  #pragma acc parallel loop
+  for (int j = 0; j < nx; ++j) {
+    const double t = static_cast<double>(j) / static_cast<double>(nx - 1);
+    const double top = tl + t * (tr - tl);
+    const double bottom = bl + t * (br - bl);
+    const size_t top_idx = static_cast<size_t>(j);
+    const size_t bottom_idx = static_cast<size_t>(ny - 1) *
+                static_cast<size_t>(nx) + static_cast<size_t>(j);
+    grid[top_idx] = top;
+    next[top_idx] = top;
+    grid[bottom_idx] = bottom;
+    next[bottom_idx] = bottom;
+  }
 
-	#pragma acc parallel loop present(grid[0:size], next[0:size])
-	for (int i = 0; i < ny; ++i) {
-		const double t = static_cast<double>(i) / static_cast<double>(ny - 1);
-		const double left = tl + t * (bl - tl);
-		const double right = tr + t * (br - tr);
-		const size_t left_idx = static_cast<size_t>(i) * static_cast<size_t>(nx);
-		const size_t right_idx = left_idx + static_cast<size_t>(nx - 1);
-		grid[left_idx] = left;
-		next[left_idx] = left;
-		grid[right_idx] = right;
-		next[right_idx] = right;
-	}
+  #pragma acc parallel loop
+  for (int i = 0; i < ny; ++i) {
+    const double t = static_cast<double>(i) / static_cast<double>(ny - 1);
+    const double left = tl + t * (bl - tl);
+    const double right = tr + t * (br - tr);
+    const size_t left_idx = static_cast<size_t>(i) * static_cast<size_t>(nx);
+    const size_t right_idx = left_idx + static_cast<size_t>(nx - 1);
+    grid[left_idx] = left;
+    next[left_idx] = left;
+    grid[right_idx] = right;
+    next[right_idx] = right;
+  }
 }
 
 void init_grids(double* grid, double* next, int nx, int ny) {
-	const int size = nx * ny;
+  const int size = nx * ny;
 
-	#pragma acc parallel loop present(grid[0:size], next[0:size])
-	for (int k = 0; k < size; ++k) {
-		grid[k] = 0.0;
-		next[k] = 0.0;
-	}
+  #pragma acc parallel loop
+  for (int k = 0; k < size; ++k) {
+    grid[k] = 0.0;
+    next[k] = 0.0;
+  }
 
-	set_boundaries(grid, next, nx, ny);
+  set_boundaries(grid, next, nx, ny);
 }
 
 void save_matrix(const std::string& path, const double* grid, int nx, int ny) {
-	std::ofstream out(path.c_str(), std::ios::out | std::ios::trunc);
-	if (!out) {
-		throw std::runtime_error("Ошибка при открытии файла: " + path);
-	}
+  std::ofstream out(path.c_str(), std::ios::out | std::ios::trunc);
+  if (!out) {
+    throw std::runtime_error("Ошибка при открытии файла: " + path);
+  }
 
-	out << std::setprecision(12);
-	for (int i = 0; i < ny; ++i) {
-		const size_t row = static_cast<size_t>(i) * static_cast<size_t>(nx);
-		for (int j = 0; j < nx; ++j) {
-			if (j > 0) {
-				out << ' ';
-			}
-			out << grid[row + static_cast<size_t>(j)];
-		}
-		out << '\n';
-	}
+  out << std::setprecision(12);
+  for (int i = 0; i < ny; ++i) {
+    const size_t row = static_cast<size_t>(i) * static_cast<size_t>(nx);
+    for (int j = 0; j < nx; ++j) {
+      if (j > 0) {
+        out << ' ';
+      }
+      out << grid[row + static_cast<size_t>(j)];
+    }
+    out << '\n';
+  }
 }
 
 void print_matrix(const double* grid, int nx, int ny) {
-	std::cout << std::fixed << std::setprecision(6);
-	for (int i = 0; i < ny; ++i) {
-		const size_t row = static_cast<size_t>(i) * static_cast<size_t>(nx);
-		for (int j = 0; j < nx; ++j) {
-			std::cout << grid[row + static_cast<size_t>(j)];
-			if (j + 1 < nx) {
-				std::cout << ' ';
-			}
-		}
-		std::cout << '\n';
-	}
+  std::cout << std::fixed << std::setprecision(6);
+  for (int i = 0; i < ny; ++i) {
+    const size_t row = static_cast<size_t>(i) * static_cast<size_t>(nx);
+    for (int j = 0; j < nx; ++j) {
+      std::cout << grid[row + static_cast<size_t>(j)];
+      if (j + 1 < nx) {
+        std::cout << ' ';
+      }
+    }
+    std::cout << '\n';
+  }
 }
 
 }  // namespace
 
 int main(int argc, char** argv) {
-	namespace po = boost::program_options;
+  namespace po = boost::program_options;
 
-	int n = 128;
-	int nx = 0;
-	int ny = 0;
-	int max_iter = 1000000;
-	double eps = 1e-6;
-	std::string out_file = "result.dat";
+  int n = 128;
+  int nx = 0;
+  int ny = 0;
+  int max_iter = 1000000;
+  double eps = 1e-6;
+  std::string out_file = "result.dat";
 
-	po::options_description desc("Опции");
-	desc.add_options()
-		("help,h", "Помощь")
-		("n", po::value<int>(&n)->default_value(128), "Размер сетки")
-		("nx", po::value<int>(&nx), "Размер сетки по X")
-		("ny", po::value<int>(&ny), "Размер сетки по Y")
-		("eps,e", po::value<double>(&eps)->default_value(1e-6), "Точность")
-		("max-iter,i", po::value<int>(&max_iter)->default_value(1000000), "Максимум итераций")
-		("out,o", po::value<std::string>(&out_file)->default_value("result.dat"), "Выходной результат");
+  po::options_description desc("Опции");
+  desc.add_options()
+    ("help,h", "Помощь")
+    ("n", po::value<int>(&n)->default_value(128), "Размер сетки")
+    ("nx", po::value<int>(&nx), "Размер сетки по X")
+    ("ny", po::value<int>(&ny), "Размер сетки по Y")
+    ("eps,e", po::value<double>(&eps)->default_value(1e-6), "Точность")
+    ("max-iter,i", po::value<int>(&max_iter)->default_value(1000000), "Максимум итераций")
+    ("out,o", po::value<std::string>(&out_file)->default_value("result.dat"), "Выходной результат");
 
-	po::variables_map vm;
-	try {
-		po::store(po::parse_command_line(argc, argv, desc), vm);
-		po::notify(vm);
-	} catch (const std::exception& ex) {
-		std::cerr << "Error: " << ex.what() << '\n';
-		std::cerr << desc << '\n';
-		return 1;
-	}
+  po::variables_map vm;
+  try {
+    po::store(po::parse_command_line(argc, argv, desc), vm);
+    po::notify(vm);
+  } catch (const std::exception& ex) {
+    std::cerr << "Error: " << ex.what() << '\n';
+    std::cerr << desc << '\n';
+    return 1;
+  }
 
-	if (vm.count("help") > 0) {
-		std::cout << desc << '\n';
-		return 0;
-	}
+  if (vm.count("help") > 0) {
+    std::cout << desc << '\n';
+    return 0;
+  }
 
-	if (nx <= 0) {
-		nx = n;
-	}
-	if (ny <= 0) {
-		ny = n;
-	}
+  if (nx <= 0) {
+    nx = n;
+  }
+  if (ny <= 0) {
+    ny = n;
+  }
 
 
-	const size_t size = static_cast<size_t>(nx) * static_cast<size_t>(ny);
-	std::unique_ptr<double[]> grid(new double[size]);
-	std::unique_ptr<double[]> next(new double[size]);
+  const size_t size = static_cast<size_t>(nx) * static_cast<size_t>(ny);
+  std::unique_ptr<double[]> grid(new double[size]);
+  std::unique_ptr<double[]> next(new double[size]);
 
-	double* cur = grid.get();
-	double* nxt = next.get();
+  init_grids(grid.get(), next.get(), nx, ny);
 
-	int iter = 0;
-	double err = 0.0;
+  double* cur = grid.get();
+  double* nxt = next.get();
 
-	std::chrono::steady_clock::time_point start_time;
-	std::chrono::steady_clock::time_point end_time;
+  int iter = 0;
+  double err = 0.0;
 
-#pragma acc data create(cur[0:size], nxt[0:size])
-	{
-		init_grids(cur, nxt, nx, ny);
-		start_time = std::chrono::steady_clock::now();
-		while (iter < max_iter) {
-			err = 0.0;
-#pragma acc parallel loop collapse(2) reduction(max : err) present(cur[0:size], nxt[0:size])
-			for (int i = 1; i < ny - 1; ++i) {
-				for (int j = 1; j < nx - 1; ++j) {
-					const size_t k = static_cast<size_t>(i) * static_cast<size_t>(nx) +
-									 static_cast<size_t>(j);
-					const double new_val = 0.25 * (cur[k - 1] + cur[k + 1] +
-									   cur[k - static_cast<size_t>(nx)] +
-									   cur[k + static_cast<size_t>(nx)]);
-					nxt[k] = new_val;
-					const double diff = std::fabs(new_val - cur[k]);
-					if (diff > err) {
-						err = diff;
-					}
-				}
-			}
 
-			std::swap(cur, nxt);
-			++iter;
+  const auto start_time = std::chrono::steady_clock::now();
 
-			if (err <= eps) {
-				break;
-			}
-		}
-		end_time = std::chrono::steady_clock::now();
-		#pragma acc update self(cur[0:size])
-	}
+#pragma acc data copy(cur[0:size], nxt[0:size])
+  {
+    while (iter < max_iter) {
+      err = 0.0;
+#pragma acc parallel loop collapse(2) reduction(max : err)
+      for (int i = 1; i < ny - 1; ++i) {
+        for (int j = 1; j < nx - 1; ++j) {
+          const size_t k = static_cast<size_t>(i) * static_cast<size_t>(nx) +
+                   static_cast<size_t>(j);
+          const double new_val = 0.25 * (cur[k - 1] + cur[k + 1] +
+                     cur[k - static_cast<size_t>(nx)] +
+                     cur[k + static_cast<size_t>(nx)]);
+          nxt[k] = new_val;
+          const double diff = std::fabs(new_val - cur[k]);
+          if (diff > err) {
+            err = diff;
+          }
+        }
+      }
 
-	const std::chrono::duration<double> elapsed = end_time - start_time;
+      std::swap(cur, nxt);
+      ++iter;
 
-	std::cout << "Итераций: " << iter << ", Ошибка: " << err
-			  << ", Время: " << elapsed.count() << " сек" << '\n';
+      if (err <= eps) {
+        break;
+      }
+    }
+  }
 
-	try {
-		save_matrix(out_file, cur, nx, ny);
-	} catch (const std::exception& ex) {
-		std::cerr << ex.what() << '\n';
-		return 1;
-	}
+  const auto end_time = std::chrono::steady_clock::now();
+  const std::chrono::duration<double> elapsed = end_time - start_time;
 
-	if (nx == ny && (nx == 10 || nx == 13)) {
-		print_matrix(cur, nx, ny);
-	}
+  std::cout << "Итераций: " << iter << ", Ошибка: " << err
+        << ", Время: " << elapsed.count() << " сек" << '\n';
 
-	return 0;
+  try {
+    save_matrix(out_file, cur, nx, ny);
+  } catch (const std::exception& ex) {
+    std::cerr << ex.what() << '\n';
+    return 1;
+  }
+
+  if (nx == ny && (nx == 10 || nx == 13)) {
+    print_matrix(cur, nx, ny);
+  }
+
+  return 0;
 }
