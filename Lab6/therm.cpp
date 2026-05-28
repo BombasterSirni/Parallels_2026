@@ -20,7 +20,7 @@ void set_boundaries(double* grid, double* next, int nx, int ny) {
   const double br = 30.0;
   const double bl = 20.0;
 
-  #pragma acc parallel loop copyout(grid[0:size], next[0:size])
+  #pragma acc parallel loop present(grid[0:size], next[0:size])
   for (int j = 0; j < nx; ++j) {
     const double t = static_cast<double>(j) / static_cast<double>(nx - 1);
     const double top = tl + t * (tr - tl);
@@ -34,7 +34,7 @@ void set_boundaries(double* grid, double* next, int nx, int ny) {
     next[bottom_idx] = bottom;
   }
 
-  #pragma acc parallel loop copyout(grid[0:size], next[0:size])
+  #pragma acc parallel loop present(grid[0:size], next[0:size])
   for (int i = 0; i < ny; ++i) {
     const double t = static_cast<double>(i) / static_cast<double>(ny - 1);
     const double left = tl + t * (bl - tl);
@@ -51,7 +51,7 @@ void set_boundaries(double* grid, double* next, int nx, int ny) {
 void init_grids(double* grid, double* next, int nx, int ny) {
   const int size = nx * ny;
 
-  #pragma acc parallel loop copyout(grid[0:size], next[0:size])
+  #pragma acc parallel loop present(grid[0:size], next[0:size])
   for (int k = 0; k < size; ++k) {
     grid[k] = 0.0;
     next[k] = 0.0;
@@ -132,36 +132,34 @@ int main(int argc, char** argv) {
     return 0;
   }
 
-  if (nx <= 0) {
-    nx = n;
-  }
-  if (ny <= 0) {
-    ny = n;
-  }
-
+  if (nx <= 0) nx = n;
+  if (ny <= 0) ny = n;
 
   const size_t size = static_cast<size_t>(nx) * static_cast<size_t>(ny);
   std::unique_ptr<double[]> grid(new double[size]);
   std::unique_ptr<double[]> next(new double[size]);
 
-  init_grids(grid.get(), next.get(), nx, ny);
-
-  double* cur = grid.get();
-  double* nxt = next.get();
+  double* p_grid = grid.get();
+  double* p_next = next.get();
 
   int iter = 0;
   double err = 0.0;
 
-
   const auto start_time = std::chrono::steady_clock::now();
 
-#pragma acc data copy(cur[0:size], nxt[0:size])
+#pragma acc data create(p_grid[0:size], p_next[0:size])
   {
+    // Инициализация теперь происходит полностью внутри GPU
+    init_grids(p_grid, p_next, nx, ny);
+
+    double* cur = p_grid;
+    double* nxt = p_next;
+
     while (iter < max_iter) {
       const bool do_check = (iter % check_interval == 0) || (iter == max_iter - 1);
       if (do_check) {
         err = 0.0;
-#pragma acc parallel loop collapse(2) reduction(max : err)
+#pragma acc parallel loop collapse(2) present(cur[0:size], nxt[0:size]) reduction(max : err)
         for (int i = 1; i < ny - 1; ++i) {
           for (int j = 1; j < nx - 1; ++j) {
             const size_t k = static_cast<size_t>(i) * static_cast<size_t>(nx) +
@@ -177,7 +175,7 @@ int main(int argc, char** argv) {
           }
         }
       } else {
-#pragma acc parallel loop collapse(2)
+#pragma acc parallel loop collapse(2) present(cur[0:size], nxt[0:size])
         for (int i = 1; i < ny - 1; ++i) {
           for (int j = 1; j < nx - 1; ++j) {
             const size_t k = static_cast<size_t>(i) * static_cast<size_t>(nx) +
@@ -197,6 +195,8 @@ int main(int argc, char** argv) {
         break;
       }
     }
+
+#pragma acc update host(cur[0:size])
   }
 
   const auto end_time = std::chrono::steady_clock::now();
@@ -205,15 +205,17 @@ int main(int argc, char** argv) {
   std::cout << "Итераций: " << iter << ", Ошибка: " << err
         << ", Время: " << elapsed.count() << " сек" << '\n';
 
+  double* final_grid = (iter % 2 == 0) ? p_grid : p_next;
+
   try {
-    save_matrix(out_file, cur, nx, ny);
+    save_matrix(out_file, final_grid, nx, ny);
   } catch (const std::exception& ex) {
     std::cerr << ex.what() << '\n';
     return 1;
   }
 
   if (nx == ny && (nx == 10 || nx == 13)) {
-    print_matrix(cur, nx, ny);
+    print_matrix(final_grid, nx, ny);
   }
 
   return 0;
